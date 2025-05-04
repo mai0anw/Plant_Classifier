@@ -1,0 +1,91 @@
+import os
+import tensorflow as tf
+from tkinter import Tk, filedialog, Button, Label, Frame, messagebox
+from PIL import Image, ImageTk
+import numpy as np
+import json
+
+
+class F1Score(tf.keras.metrics.Metric):
+    def __init__(self, name='f1_score', **kwargs):
+        super(F1Score, self).__init__(name=name, **kwargs)
+        self.precision = tf.keras.metrics.Precision()
+        self.recall = tf.keras.metrics.Recall()
+
+    def update_state(self, y_actual, y_pred, sample_weight=None):
+        self.precision.update_state(y_actual, y_pred, sample_weight)
+        self.recall.update_state(y_actual, y_pred, sample_weight)
+
+    def result(self):
+        p = self.precision.result()
+        r = self.recall.result()
+        return 2 * ((p * r) / (p + r + tf.keras.backend.epsilon()))
+    
+    def reset_states(self):
+        self.precision.reset_states()
+        self.recall.reset_states()
+
+model = tf.keras.models.load_model('leaf_classification_model.h5', custom_objects={'F1Score': F1Score})
+
+
+with open('label_mapping.json', 'r') as f:
+    index_to_label = json.load(f)
+
+
+window = Tk()
+window.title("Leaf Classifier")
+window.geometry("500x500")
+
+frame = Frame(window)
+frame.pack(pady=20)
+
+prediction_label = Label(frame, text="Select an image to classify", font=("Arial", 14))
+prediction_label.pack()
+
+
+image_label = Label(window)
+image_label.pack()
+
+
+def upload_image():
+    file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.png")])
+    
+    if file_path:
+        try:
+            upload_button.config(state='disabled')
+            prediction_label.config(text="Processing...")
+            window.update()
+
+            img = Image.open(file_path)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            img_resized = img.resize((128, 128))
+            img_array = np.array(img_resized) / 255.0
+            img_array = np.expand_dims(img_array, axis=0)
+
+            # Predict in inference mode
+            prediction = model(img_array, training=False).numpy()
+            predicted_class = np.argmax(prediction, axis=1)[0]
+            predicted_label = index_to_label[str(predicted_class)]
+            confidence = float(prediction[0][predicted_class])
+
+            prediction_label.config(
+                text=f"Predicted Class: {predicted_label}\nConfidence: {confidence:.2f}"
+            )
+
+            img_display = ImageTk.PhotoImage(img.resize((300, 300)))
+            image_label.config(image=img_display)
+            image_label.image = img_display
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error processing the image:\n{e}")
+        finally:
+            upload_button.config(state='normal')
+    else:
+        messagebox.showinfo("No Image", "No image selected.")
+
+upload_button = Button(frame, text="Upload Image", font=("Arial", 14), command=upload_image)
+upload_button.pack(pady=10)
+
+
+window.mainloop()
