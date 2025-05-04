@@ -1,0 +1,70 @@
+import os
+import tensorflow as tf
+from tkinter import Tk, filedialog, Button, Label, Frame
+from tkinter import messagebox
+from PIL import Image, ImageTk
+import numpy as np
+
+# Load the trained model
+model = tf.keras.models.load_model('path_to_your_model.h5')  # Update with your actual model path
+
+# List of species (these should match the class labels from your model)
+species_folders = ["species1", "species2", "species3"]  # Example, update this with actual class names
+
+# Define the window
+window = Tk()
+window.title("Leaf Species Classifier")
+window.geometry("500x400")
+
+# Create a frame for the UI
+frame = Frame(window)
+frame.pack(pady=20)
+
+# Label to show prediction
+prediction_label = Label(frame, text="Select an image to classify", font=("Arial", 14))
+prediction_label.pack()
+
+# Create the button to select an image
+def upload_image():
+    # Open file dialog to choose image
+    file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.png")])
+    
+    if file_path:
+        try:
+            # Load and display the image
+            img = Image.open(file_path)
+            img = img.resize((128, 128))  # Resize the image to the model's expected input size
+            img_array = np.array(img) / 255.0  # Normalize the image
+            img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+
+            # Predict with the model
+            prediction = model.predict(img_array)
+            predicted_class = np.argmax(prediction, axis=1)[0]
+            predicted_label = species_folders[predicted_class]
+            confidence = float(prediction[0][predicted_class])
+
+            # Update the label with the result
+            prediction_label.config(
+                text=f"Predicted Class: {predicted_label}\nConfidence: {confidence:.2f}"
+            )
+            
+            # Show the image
+            img_display = ImageTk.PhotoImage(img)
+            image_label.config(image=img_display)
+            image_label.image = img_display
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error processing the image: {e}")
+    else:
+        messagebox.showinfo("No Image", "No image selected.")
+
+# Button to choose image
+upload_button = Button(frame, text="Upload Image", font=("Arial", 14), command=upload_image)
+upload_button.pack(pady=10)
+
+# Label to display the uploaded image
+image_label = Label(window)
+image_label.pack()
+
+# Start the GUI
+window.mainloop()
